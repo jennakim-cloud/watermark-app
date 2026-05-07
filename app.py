@@ -405,51 +405,45 @@ with col_preview:
         </div>
         """, unsafe_allow_html=True)
     else:
-        # 선택된 파일 탭으로 구분
-        if len(uploaded_files) == 1:
-            selected_file = uploaded_files[0]
-        else:
+        # 복수 파일이면 탭으로 구분, 1개면 그냥 표시
+        if len(uploaded_files) > 1:
             tab_names = [f.name[:20] for f in uploaded_files]
             tabs = st.tabs(tab_names)
+        else:
+            tabs = None
 
-        for i, ufile in enumerate(uploaded_files):
-            ctx = tabs[i] if len(uploaded_files) > 1 else st
+        def render_file(ufile, i, container):
+            ufile.seek(0)
+            base_img = Image.open(ufile)
+            resized = resize_and_crop(base_img, TARGET_SIZE)
+            result_img = apply_watermark(resized, position, color, logo_scale)
 
-            with ctx:
-                ufile.seek(0)
-                base_img = Image.open(ufile)
+            container.image(result_img, use_container_width=True)
+            container.markdown(
+                f'<div class="file-info" style="margin-top:4px;">'
+                f'📐 {result_img.size[0]}×{result_img.size[1]}px &nbsp;·&nbsp; '
+                f'🏷️ {position} &nbsp;·&nbsp; '
+                f'🎨 {"블랙" if color=="black" else "화이트"}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            img_bytes = image_to_bytes(result_img)
+            stem = Path(ufile.name).stem
+            out_name = f"{stem}_watermark_{position}.jpg"
+            container.download_button(
+                label=f"⬇  다운로드  {out_name}",
+                data=img_bytes,
+                file_name=out_name,
+                mime="image/jpeg",
+                key=f"dl_{i}",
+            )
 
-                # 규격 맞춤
-                resized = resize_and_crop(base_img, TARGET_SIZE)
-
-                # 워터마크 삽입
-                result_img = apply_watermark(resized, position, color, logo_scale)
-
-                # 미리보기
-                st.image(result_img, use_container_width=True)
-
-                # 메타 정보
-                st.markdown(
-                    f'<div class="file-info" style="margin-top:4px;">'
-                    f'📐 {result_img.size[0]}×{result_img.size[1]}px &nbsp;·&nbsp; '
-                    f'🏷️ {position} &nbsp;·&nbsp; '
-                    f'🎨 {"블랙" if color=="black" else "화이트"}'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-                # 다운로드
-                img_bytes = image_to_bytes(result_img)
-                stem = Path(ufile.name).stem
-                out_name = f"{stem}_watermark_{position}.jpg"
-
-                st.download_button(
-                    label=f"⬇  다운로드  {out_name}",
-                    data=img_bytes,
-                    file_name=out_name,
-                    mime="image/jpeg",
-                    key=f"dl_{i}",
-                )
+        if tabs is not None:
+            for i, ufile in enumerate(uploaded_files):
+                with tabs[i]:
+                    render_file(ufile, i, st)
+        else:
+            render_file(uploaded_files[0], 0, st)
 
 # ── 일괄 다운로드 (ZIP) ────────────────────────────────────────────────────────
 if uploaded_files and len(uploaded_files) > 1:
