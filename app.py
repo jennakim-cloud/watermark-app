@@ -191,19 +191,19 @@ LOGO_DIR = Path(__file__).parent / "logos"
 LOGO_FILES = {
     "우상단": {
         "black": LOGO_DIR / "무신사_스탠다드_우상단.png",
-        "white": LOGO_DIR / "무신사_스탠다드_우상단.png",  # 실제론 화이트버전 별도
+        "white": LOGO_DIR / "무신사_스탠다드_우상단_white.png",
     },
     "우하단": {
         "black": LOGO_DIR / "무신사_스탠다드_우하단.png",
-        "white": LOGO_DIR / "무신사_스탠다드_우하단.png",
+        "white": LOGO_DIR / "무신사_스탠다드_우하단_white.png",
     },
     "좌상단": {
         "black": LOGO_DIR / "무신사_스탠다드_좌상단.png",
-        "white": LOGO_DIR / "무신사_스탠다드_좌상단.png",
+        "white": LOGO_DIR / "무신사_스탠다드_좌상단_white.png",
     },
     "좌하단": {
         "black": LOGO_DIR / "무신사_스탠다드_좌하단.png",
-        "white": LOGO_DIR / "무신사_스탠다드_좌하단.png",
+        "white": LOGO_DIR / "무신사_스탠다드_좌하단_white.png",
     },
 }
 
@@ -228,17 +228,11 @@ def resize_and_crop(img: Image.Image, target=(1056, 720)) -> Image.Image:
     return img
 
 
-def load_logo(position: str, color: str) -> Image.Image | None:
+def load_logo(position: str, color: str):
     """로고 이미지 로드. 없으면 None 반환."""
     path = LOGO_FILES.get(position, {}).get(color)
     if path and path.exists():
-        logo = Image.open(path).convert("RGBA")
-        # 로고가 완전히 검정인 경우(업로드 오류) 대체 텍스트 로고 생성
-        import numpy as np
-        arr = __import__('numpy').array(logo)
-        if arr.max() == 0:
-            return make_text_logo(color)
-        return logo
+        return Image.open(path).convert("RGBA")
     return make_text_logo(color)
 
 
