@@ -9,6 +9,7 @@ import numpy as np
 # Playwright chromium 자동 설치
 import subprocess
 import sys
+import tempfile
 
 @st.cache_resource
 def install_playwright():
@@ -56,22 +57,14 @@ BRANDS = {
     "29CM":          {"svg": "cm29.svg",               "w": 136, "h": 34},
 }
 
-@st.cache_resource
-def get_browser():
-    from playwright.sync_api import sync_playwright
-    pw = sync_playwright().start()
-    browser = pw.chromium.launch()
-    return pw, browser
-
 def svg_to_logo(svg_path: Path, w: int, h: int, color: str) -> Image.Image | None:
-    """SVG를 playwright로 렌더링 → 투명 배경 RGBA 로고 반환"""
+    """SVG를 subprocess playwright로 렌더링 → 투명 배경 RGBA 로고 반환"""
     if not svg_path.exists():
         return None
 
     with open(svg_path) as f:
         s = f.read()
 
-    # fill 색상 설정
     fill_color = "#ffffff" if color == "white" else "#000000"
     s = re.sub(r'fill\s*:\s*#[0-9a-fA-F]{3,6}', f'fill:{fill_color}', s)
     s = re.sub(r'fill="[^"]+"', f'fill="{fill_color}"', s)
@@ -85,16 +78,33 @@ def svg_to_logo(svg_path: Path, w: int, h: int, color: str) -> Image.Image | Non
             f'body{{background:transparent;width:{w}px;height:{h}px;}}</style></head>'
             f'<body>{s}</body></html>')
 
+    # 별도 Python 프로세스로 playwright 실행 (스레드 충돌 방지)
+    script = f"""
+import sys
+from playwright.sync_api import sync_playwright
+import base64
+
+html = {repr(html)}
+w, h = {w}, {h}
+
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    page = browser.new_page(viewport={{'width': w, 'height': h}})
+    page.set_content(html)
+    png = page.screenshot(clip={{'x':0,'y':0,'width':w,'height':h}}, omit_background=True)
+    browser.close()
+
+sys.stdout.buffer.write(png)
+"""
     try:
-        pw, browser = get_browser()
-        page = browser.new_page(viewport={'width': w, 'height': h})
-        page.set_content(html)
-        png = page.screenshot(
-            clip={'x': 0, 'y': 0, 'width': w, 'height': h},
-            omit_background=True
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True, timeout=30
         )
-        page.close()
-        return Image.open(io.BytesIO(png)).convert("RGBA")
+        if result.returncode != 0 or not result.stdout:
+            st.error(f"렌더링 실패: {result.stderr.decode()[:200]}")
+            return None
+        return Image.open(io.BytesIO(result.stdout)).convert("RGBA")
     except Exception as e:
         st.error(f"로고 렌더링 실패: {e}")
         return None
