@@ -35,7 +35,12 @@ MARGIN      = 45
 
 # 브랜드별 설정: 4배 PNG + 최종 합성 크기(px) 명시
 BRANDS = {
-    "무신사 스탠다드": {"black": "musinsa_standard_black.png", "white": "musinsa_standard_white.png", "final_w": 127, "final_h": 55},
+    "무신사 스탠다드": {
+    "black": "musinsa_standard_black.png",
+    "white": "musinsa_standard_white.png",
+    "final_w": 127,   # 126.52 반올림
+    "final_h": 55,    # 450x194.5 비율 기준
+},
     "무신사 기업":    {"black": "musinsa_corporate_black.png", "white": "musinsa_corporate_white.png", "final_w": 193, "final_h": 32},
     "무신사 스토어":  {"black": "musinsa_store_black.png",     "white": "musinsa_store_white.png",     "final_w": 182, "final_h": 34},
     "무신사 뷰티":   {"black": "musinsa_beauty_black.png",     "white": "musinsa_beauty_white.png",     "final_w": 167, "final_h": 46},
