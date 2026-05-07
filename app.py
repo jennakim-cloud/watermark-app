@@ -4,7 +4,7 @@ import io
 import zipfile
 from pathlib import Path
 
-st.set_page_config(page_title="무신사 워터마크 삽입기", page_icon="🖼️", layout="wide")
+st.set_page_config(page_title="(해상도 이슈로 점검 중)무신사 워터마크 삽입기", page_icon="🖼️", layout="wide")
 
 st.markdown("""
 <style>
