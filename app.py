@@ -188,9 +188,13 @@ st.markdown("""
 # ── 로고 파일 경로 ─────────────────────────────────────────────────────────────
 LOGO_DIR = Path(__file__).parent / "logos"
 
-import json as _json
-_sizes_path = Path(__file__).parent / "logos" / "logo_sizes.json"
-LOGO_SIZES = _json.loads(_sizes_path.read_text()) if _sizes_path.exists() else {}
+LOGO_SIZES = {
+    "musinsa_standard": {"dim": "width",  "size": 126.52},
+    "musinsa_corporate":{"dim": "height", "size": 32},
+    "musinsa_store":    {"dim": "height", "size": 34},
+    "musinsa_beauty":   {"dim": "height", "size": 45.51},
+    "cm29":             {"dim": "height", "size": 34},
+}
 
 # 브랜드명 → logo_sizes.json 키 매핑
 BRAND_KEY = {
@@ -198,7 +202,6 @@ BRAND_KEY = {
     "무신사 기업":    "musinsa_corporate",
     "무신사 스토어":  "musinsa_store",
     "무신사 뷰티":   "musinsa_beauty",
-    "무신사 스포츠":  "musinsa_sports",
     "29CM":          "cm29",
 }
 
@@ -219,10 +222,6 @@ LOGO_FILES = {
     "무신사 뷰티": {
         "black": LOGO_DIR / "musinsa_beauty_black.png",
         "white": LOGO_DIR / "musinsa_beauty_white.png",
-    },
-    "무신사 스포츠": {
-        "black": LOGO_DIR / "musinsa_sports_black.png",
-        "white": LOGO_DIR / "musinsa_sports_white.png",
     },
     "29CM": {
         "black": LOGO_DIR / "cm29_black.png",
