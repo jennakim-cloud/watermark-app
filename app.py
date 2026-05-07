@@ -189,26 +189,13 @@ st.markdown("""
 LOGO_DIR = Path(__file__).parent / "logos"
 
 LOGO_FILES = {
-    "우상단": {
-        "black": LOGO_DIR / "무신사_스탠다드_우상단.png",
-        "white": LOGO_DIR / "무신사_스탠다드_우상단_white.png",
-    },
-    "우하단": {
-        "black": LOGO_DIR / "무신사_스탠다드_우하단.png",
-        "white": LOGO_DIR / "무신사_스탠다드_우하단_white.png",
-    },
-    "좌상단": {
-        "black": LOGO_DIR / "무신사_스탠다드_좌상단.png",
-        "white": LOGO_DIR / "무신사_스탠다드_좌상단_white.png",
-    },
-    "좌하단": {
-        "black": LOGO_DIR / "무신사_스탠다드_좌하단.png",
-        "white": LOGO_DIR / "무신사_스탠다드_좌하단_white.png",
-    },
+    "black": LOGO_DIR / "logo_black.png",
+    "white": LOGO_DIR / "logo_white.png",
 }
 
 TARGET_SIZE = (1056, 720)
-MARGIN = 32  # 로고 여백 (px)
+LOGO_WIDTH  = 214   # 고정 가로 크기 (px)
+MARGIN      = 45    # 고정 여백 (px)
 
 # ── 핵심 함수 ─────────────────────────────────────────────────────────────────
 
@@ -228,9 +215,9 @@ def resize_and_crop(img: Image.Image, target=(1056, 720)) -> Image.Image:
     return img
 
 
-def load_logo(position: str, color: str):
-    """로고 이미지 로드. 없으면 None 반환."""
-    path = LOGO_FILES.get(position, {}).get(color)
+def load_logo(color: str):
+    """로고 이미지 로드."""
+    path = LOGO_FILES.get(color)
     if path and path.exists():
         return Image.open(path).convert("RGBA")
     return make_text_logo(color)
@@ -253,24 +240,22 @@ def apply_watermark(
     base_img: Image.Image,
     position: str,
     color: str,
-    logo_scale: float = 0.22,
 ) -> Image.Image:
     """베이스 이미지에 로고 워터마크를 합성"""
     base = base_img.convert("RGBA")
     bw, bh = base.size
 
-    logo = load_logo(position, color)
+    logo = load_logo(color)
     if logo is None:
         return base_img.convert("RGB")
 
-    # 로고 크기 조정 (이미지 너비의 logo_scale 비율)
-    max_logo_w = int(bw * logo_scale)
+    # 로고 크기: 가로 214px 고정, 세로 비율 유지
     lw, lh = logo.size
-    ratio = max_logo_w / lw
-    logo = logo.resize((max_logo_w, int(lh * ratio)), Image.LANCZOS)
+    ratio = LOGO_WIDTH / lw
+    logo = logo.resize((LOGO_WIDTH, int(lh * ratio)), Image.LANCZOS)
     lw, lh = logo.size
 
-    # 위치 계산
+    # 위치 계산 (마진 45px 고정)
     if position == "우상단":
         x, y = bw - lw - MARGIN, MARGIN
     elif position == "우하단":
@@ -329,22 +314,6 @@ with st.sidebar:
         label_visibility="collapsed",
         format_func=lambda x: "⬛ 블랙" if x == "black" else "⬜ 화이트",
     )
-
-    st.markdown("---")
-
-    # 로고 크기
-    st.markdown("**로고 크기**")
-    logo_scale = st.slider(
-        "이미지 대비 비율",
-        min_value=0.10,
-        max_value=0.40,
-        value=0.22,
-        step=0.01,
-        format="%.0f%%",
-        help="이미지 너비 대비 로고 크기 비율",
-    )
-    # slider는 0~1이므로 표시용 변환
-    st.caption(f"현재: {logo_scale*100:.0f}%")
 
     st.markdown("---")
     st.markdown("""
@@ -410,7 +379,7 @@ with col_preview:
             ufile.seek(0)
             base_img = Image.open(ufile)
             resized = resize_and_crop(base_img, TARGET_SIZE)
-            result_img = apply_watermark(resized, position, color, logo_scale)
+            result_img = apply_watermark(resized, position, color)
 
             container.image(result_img, use_container_width=True)
             container.markdown(
@@ -452,7 +421,7 @@ if uploaded_files and len(uploaded_files) > 1:
             ufile.seek(0)
             base_img = Image.open(ufile)
             resized = resize_and_crop(base_img, TARGET_SIZE)
-            result_img = apply_watermark(resized, position, color, logo_scale)
+            result_img = apply_watermark(resized, position, color)
             img_bytes = image_to_bytes(result_img)
             stem = Path(ufile.name).stem
             zf.writestr(f"{stem}_watermark_{position}.jpg", img_bytes)
