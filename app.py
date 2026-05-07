@@ -283,10 +283,18 @@ def svg_to_logo(svg_path: str, final_w: int, final_h: int, color: str) -> Image.
         html_path = hf.name
     png_path = html_path.replace('.html', '.png')
 
-    subprocess.run(['wkhtmltoimage',
-        '--width', str(render_w), '--height', str(render_h),
-        '--disable-smart-width', '--zoom', '1',
-        html_path, png_path], capture_output=True)
+    # wkhtmltoimage 실행 (경로 명시)
+    for cmd in ['wkhtmltoimage', '/usr/bin/wkhtmltoimage']:
+        result = subprocess.run([cmd,
+            '--width', str(render_w), '--height', str(render_h),
+            '--disable-smart-width', '--zoom', '1',
+            html_path, png_path], capture_output=True)
+        if result.returncode == 0 or os.path.exists(png_path):
+            break
+
+    if not os.path.exists(png_path):
+        os.remove(html_path)
+        return make_text_logo(color)
 
     img = Image.open(png_path).convert('RGB')
     img_final = img.resize((final_w, final_h), Image.LANCZOS)
