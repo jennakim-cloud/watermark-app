@@ -188,13 +188,31 @@ st.markdown("""
 # ── 로고 파일 경로 ─────────────────────────────────────────────────────────────
 LOGO_DIR = Path(__file__).parent / "logos"
 
+# 브랜드별 로고 파일 (black/white 각각 지정 크기로 저장됨)
 LOGO_FILES = {
-    "black": LOGO_DIR / "logo_black.png",
-    "white": LOGO_DIR / "logo_white.png",
+    "무신사 스탠다드": {
+        "black": LOGO_DIR / "musinsa_standard_black.png",
+        "white": LOGO_DIR / "musinsa_standard_white.png",
+    },
+    "무신사 기업": {
+        "black": LOGO_DIR / "musinsa_corporate_black.png",
+        "white": LOGO_DIR / "musinsa_corporate_white.png",
+    },
+    "무신사 스토어": {
+        "black": LOGO_DIR / "musinsa_store_black.png",
+        "white": LOGO_DIR / "musinsa_store_white.png",
+    },
+    "무신사 뷰티": {
+        "black": LOGO_DIR / "musinsa_beauty_black.png",
+        "white": LOGO_DIR / "musinsa_beauty_white.png",
+    },
+    "무신사 스포츠": {
+        "black": LOGO_DIR / "musinsa_sports_black.png",
+        "white": LOGO_DIR / "musinsa_sports_white.png",
+    },
 }
 
 TARGET_SIZE = (1056, 720)
-LOGO_WIDTH  = 214   # 고정 가로 크기 (px)
 MARGIN      = 45    # 고정 여백 (px)
 
 # ── 핵심 함수 ─────────────────────────────────────────────────────────────────
@@ -215,9 +233,9 @@ def resize_and_crop(img: Image.Image, target=(1056, 720)) -> Image.Image:
     return img
 
 
-def load_logo(color: str):
+def load_logo(brand: str, color: str):
     """로고 이미지 로드."""
-    path = LOGO_FILES.get(color)
+    path = LOGO_FILES.get(brand, {}).get(color)
     if path and path.exists():
         return Image.open(path).convert("RGBA")
     return make_text_logo(color)
@@ -240,19 +258,17 @@ def apply_watermark(
     base_img: Image.Image,
     position: str,
     color: str,
+    brand: str,
 ) -> Image.Image:
     """베이스 이미지에 로고 워터마크를 합성"""
     base = base_img.convert("RGBA")
     bw, bh = base.size
 
-    logo = load_logo(color)
+    logo = load_logo(brand, color)
     if logo is None:
         return base_img.convert("RGB")
 
-    # 로고 크기: 가로 214px 고정, 세로 비율 유지
-    lw, lh = logo.size
-    ratio = LOGO_WIDTH / lw
-    logo = logo.resize((LOGO_WIDTH, int(lh * ratio)), Image.LANCZOS)
+    # 로고는 이미 지정 크기로 저장되어 있음 — 그대로 사용
     lw, lh = logo.size
 
     # 위치 계산 (마진 45px 고정)
@@ -292,6 +308,16 @@ st.markdown("""
 # ── 사이드바: 설정 패널 ────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div class="card-title">⚙ 워터마크 설정</div>', unsafe_allow_html=True)
+
+    # 브랜드 선택
+    st.markdown("**브랜드**")
+    brand = st.selectbox(
+        "브랜드",
+        list(LOGO_FILES.keys()),
+        label_visibility="collapsed",
+    )
+
+    st.markdown("---")
 
     # 로고 위치
     st.markdown("**로고 삽입 위치**")
@@ -379,7 +405,7 @@ with col_preview:
             ufile.seek(0)
             base_img = Image.open(ufile)
             resized = resize_and_crop(base_img, TARGET_SIZE)
-            result_img = apply_watermark(resized, position, color)
+            result_img = apply_watermark(resized, position, color, brand)
 
             container.image(result_img, use_container_width=True)
             container.markdown(
@@ -421,7 +447,7 @@ if uploaded_files and len(uploaded_files) > 1:
             ufile.seek(0)
             base_img = Image.open(ufile)
             resized = resize_and_crop(base_img, TARGET_SIZE)
-            result_img = apply_watermark(resized, position, color)
+            result_img = apply_watermark(resized, position, color, brand)
             img_bytes = image_to_bytes(result_img)
             stem = Path(ufile.name).stem
             zf.writestr(f"{stem}_watermark_{position}.jpg", img_bytes)
