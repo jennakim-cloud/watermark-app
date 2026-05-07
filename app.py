@@ -1,10 +1,10 @@
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 import io
 import zipfile
 from pathlib import Path
 
-st.set_page_config(page_title="(해상도 이슈로 점검 중)무신사 워터마크 삽입기", page_icon="🖼️", layout="wide")
+st.set_page_config(page_title="무신사 워터마크 삽입기", page_icon="🖼️", layout="wide")
 
 st.markdown("""
 <style>
@@ -33,18 +33,28 @@ LOGO_DIR    = Path(__file__).parent / "logos"
 TARGET_SIZE = (1056, 720)
 MARGIN      = 45
 
-# 브랜드별 설정: 4배 PNG + 최종 합성 크기(px) 명시
+# 브랜드별 로고 파일명 (리사이즈 없이 그대로 사용)
 BRANDS = {
     "무신사 스탠다드": {
-    "black": "musinsa_standard_black.png",
-    "white": "musinsa_standard_white.png",
-    "final_w": 127,   # 126.52 반올림
-    "final_h": 55,    # 450x194.5 비율 기준
-},
-    "무신사 기업":    {"black": "musinsa_corporate_black.png", "white": "musinsa_corporate_white.png", "final_w": 193, "final_h": 32},
-    "무신사 스토어":  {"black": "musinsa_store_black.png",     "white": "musinsa_store_white.png",     "final_w": 182, "final_h": 34},
-    "무신사 뷰티":   {"black": "musinsa_beauty_black.png",     "white": "musinsa_beauty_white.png",     "final_w": 167, "final_h": 46},
-    "29CM":          {"black": "cm29_black.png",               "white": "cm29_white.png",               "final_w": 136, "final_h": 34},
+        "black": "musinsa_standard_black.png",
+        "white": "musinsa_standard_white.png",
+    },
+    "무신사 기업": {
+        "black": "musinsa_corporate_black.png",
+        "white": "musinsa_corporate_white.png",
+    },
+    "무신사 스토어": {
+        "black": "musinsa_store_black.png",
+        "white": "musinsa_store_white.png",
+    },
+    "무신사 뷰티": {
+        "black": "musinsa_beauty_black.png",
+        "white": "musinsa_beauty_white.png",
+    },
+    "29CM": {
+        "black": "cm29_black.png",
+        "white": "cm29_white.png",
+    },
 }
 
 def resize_and_crop(img, target=(1056, 720)):
@@ -62,8 +72,8 @@ def load_logo(brand, color):
     path = LOGO_DIR / info[color]
     if not path.exists():
         return None
-    logo = Image.open(path).convert("RGBA")
-    return logo.resize((info["final_w"], info["final_h"]), Image.LANCZOS)
+    # 리사이즈 없이 그대로 로드
+    return Image.open(path).convert("RGBA")
 
 def apply_watermark(base_img, position, color, brand):
     base = base_img.convert("RGBA")
@@ -117,9 +127,14 @@ with col_upload:
     if uploaded_files:
         st.markdown(f'<span class="badge badge-ok">✓ {len(uploaded_files)}개 업로드됨</span>', unsafe_allow_html=True)
         for f in uploaded_files:
+            f.seek(0)
             ow, oh = Image.open(f).size
             ok = (ow, oh) == TARGET_SIZE
-            st.markdown(f'<div class="file-info">📄 {f.name} &nbsp;<span class="badge {"badge-ok" if ok else "badge-warn"}">{"규격 일치" if ok else f"리사이즈 필요 ({ow}×{oh})"}</span></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="file-info">📄 {f.name} &nbsp;'
+                f'<span class="badge {"badge-ok" if ok else "badge-warn"}">'
+                f'{"규격 일치" if ok else f"리사이즈 필요 ({ow}×{oh})"}'
+                f'</span></div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="upload-zone">🖼️ JPG, PNG, WEBP 등 지원<br><small>복수 파일 동시 업로드 가능</small></div>', unsafe_allow_html=True)
 
@@ -132,11 +147,21 @@ with col_preview:
 
         def render_file(ufile, i, container):
             ufile.seek(0)
-            result_img = apply_watermark(resize_and_crop(Image.open(ufile), TARGET_SIZE), position, color, brand)
+            result_img = apply_watermark(
+                resize_and_crop(Image.open(ufile), TARGET_SIZE),
+                position, color, brand)
             container.image(result_img, use_container_width=True)
-            container.markdown(f'<div class="file-info" style="margin-top:4px;">📐 {result_img.size[0]}×{result_img.size[1]}px &nbsp;·&nbsp; 🏷️ {position} &nbsp;·&nbsp; 🎨 {"블랙" if color=="black" else "화이트"}</div>', unsafe_allow_html=True)
+            container.markdown(
+                f'<div class="file-info" style="margin-top:4px;">'
+                f'📐 {result_img.size[0]}×{result_img.size[1]}px &nbsp;·&nbsp;'
+                f'🏷️ {position} &nbsp;·&nbsp;'
+                f'🎨 {"블랙" if color=="black" else "화이트"}</div>',
+                unsafe_allow_html=True)
             out_name = f"{Path(ufile.name).stem}_watermark_{position}.jpg"
-            container.download_button(label=f"⬇  다운로드  {out_name}", data=image_to_bytes(result_img), file_name=out_name, mime="image/jpeg", key=f"dl_{i}")
+            container.download_button(
+                label=f"⬇  다운로드  {out_name}",
+                data=image_to_bytes(result_img),
+                file_name=out_name, mime="image/jpeg", key=f"dl_{i}")
 
         if tabs:
             for i, ufile in enumerate(uploaded_files):
@@ -145,6 +170,7 @@ with col_preview:
         else:
             render_file(uploaded_files[0], 0, st)
 
+# ── 일괄 다운로드 ─────────────────────────────────────────────────────────────
 if uploaded_files and len(uploaded_files) > 1:
     st.markdown("---")
     st.markdown('<div class="card-title">③ 전체 일괄 다운로드</div>', unsafe_allow_html=True)
@@ -152,10 +178,18 @@ if uploaded_files and len(uploaded_files) > 1:
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for ufile in uploaded_files:
             ufile.seek(0)
-            result_img = apply_watermark(resize_and_crop(Image.open(ufile), TARGET_SIZE), position, color, brand)
-            zf.writestr(f"{Path(ufile.name).stem}_watermark_{position}.jpg", image_to_bytes(result_img))
+            result_img = apply_watermark(
+                resize_and_crop(Image.open(ufile), TARGET_SIZE),
+                position, color, brand)
+            zf.writestr(
+                f"{Path(ufile.name).stem}_watermark_{position}.jpg",
+                image_to_bytes(result_img))
     zip_buf.seek(0)
-    st.download_button(label=f"⬇  전체 {len(uploaded_files)}개 ZIP으로 다운로드", data=zip_buf.read(), file_name=f"musinsa_watermark_{position}.zip", mime="application/zip")
+    st.download_button(
+        label=f"⬇  전체 {len(uploaded_files)}개 ZIP으로 다운로드",
+        data=zip_buf.read(),
+        file_name=f"musinsa_watermark_{position}.zip",
+        mime="application/zip")
 
 st.markdown("---")
 st.markdown('<p style="text-align:center;font-size:0.72rem;color:#BBBBBB;letter-spacing:0.08em;">MUSINSA · PRESS IMAGE WATERMARK SYSTEM</p>', unsafe_allow_html=True)
