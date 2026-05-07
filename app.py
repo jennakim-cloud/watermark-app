@@ -6,6 +6,18 @@ import re
 from pathlib import Path
 import numpy as np
 
+# Playwright chromium 자동 설치
+import subprocess
+import sys
+
+@st.cache_resource
+def install_playwright():
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
+                   capture_output=True)
+    return True
+
+install_playwright()
+
 st.set_page_config(page_title="무신사 워터마크 삽입기", page_icon="🖼️", layout="wide")
 
 st.markdown("""
