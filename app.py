@@ -1,5 +1,8 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
+import subprocess
+import re as _re
+import xml.etree.ElementTree as ET
 import io
 import os
 import base64
@@ -250,12 +253,53 @@ def resize_and_crop(img: Image.Image, target=(1056, 720)) -> Image.Image:
     return img
 
 
-def load_logo(brand: str, color: str):
-    """로고 이미지 로드."""
-    path = LOGO_FILES.get(brand, {}).get(color)
-    if path and path.exists():
-        return Image.open(path).convert("RGBA")
-    return make_text_logo(color)
+def svg_to_logo(svg_path: str, final_w: int, final_h: int, color: str) -> Image.Image:
+    """SVG를 고해상도로 렌더링 후 목표 크기로 다운샘플 → 선명한 로고 반환"""
+    import numpy as np
+    with open(svg_path, 'r') as f:
+        s = f.read()
+
+    # fill 강제 검정
+    s = _re.sub(r'fill\s*:\s*#[0-9a-fA-F]{3,6}', 'fill:#000000', s)
+    s = _re.sub(r'fill="[^"]+"', 'fill="#000000"', s)
+    s = _re.sub(r'(\.st\d+\s*\{[^}]*)fill\s*:\s*[^;}\s]+', r'\g<1>fill:#000000', s)
+
+    # width/height 제거 후 렌더링 크기로 재설정
+    scale = max(16, 1000 // final_w)
+    render_w = final_w * scale
+    render_h = final_h * scale
+    s = _re.sub(r'\s+width="[^"]*"', '', s)
+    s = _re.sub(r'\s+height="[^"]*"', '', s)
+    s = s.replace('<svg ', f'<svg width="{render_w}" height="{render_h}" ', 1)
+
+    html = (f'<!DOCTYPE html><html><head><meta charset="utf-8">'
+            f'<style>*{{margin:0;padding:0;}}body{{background:white;'
+            f'width:{render_w}px;height:{render_h}px;overflow:hidden;}}</style>'
+            f'</head><body>{s}</body></html>')
+
+    import tempfile, os
+    with tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w') as hf:
+        hf.write(html)
+        html_path = hf.name
+    png_path = html_path.replace('.html', '.png')
+
+    subprocess.run(['wkhtmltoimage',
+        '--width', str(render_w), '--height', str(render_h),
+        '--disable-smart-width', '--zoom', '1',
+        html_path, png_path], capture_output=True)
+
+    img = Image.open(png_path).convert('RGB')
+    img_final = img.resize((final_w, final_h), Image.LANCZOS)
+    os.remove(html_path)
+    os.remove(png_path)
+
+    arr = np.array(img_final, dtype=np.float32)
+    alpha = np.clip(255 - arr[:,:,0], 0, 255).astype(np.uint8)
+    result = np.zeros((final_h, final_w, 4), dtype=np.uint8)
+    if color == 'white':
+        result[:,:,:3] = 255
+    result[:,:,3] = alpha
+    return Image.fromarray(result)
 
 
 def make_text_logo(color: str) -> Image.Image:
@@ -278,20 +322,26 @@ def apply_watermark(
     brand: str,
 ) -> Image.Image:
     """베이스 이미지에 로고 워터마크를 합성"""
+    import numpy as np
     base = base_img.convert("RGBA")
     bw, bh = base.size
 
-    logo = load_logo(brand, color)
-    if logo is None:
+    info = LOGO_FILES.get(brand, {})
+    svg_path = info.get("svg")
+    if not svg_path or not svg_path.exists():
         return base_img.convert("RGB")
 
-    # 합성 직전에 목표 크기로 리사이즈 (원본 고해상도 유지)
-    lw, lh = logo.size
-    size_info = LOGO_SIZES.get(BRAND_KEY.get(brand, ""), {})
-    if size_info:
-        dim, target = size_info["dim"], size_info["size"]
-        ratio = target / (lw if dim == "width" else lh)
-        logo = logo.resize((round(lw * ratio), round(lh * ratio)), Image.LANCZOS)
+    dim, target = info["dim"], info["size"]
+    vb = ET.parse(str(svg_path)).getroot().get('viewBox', '0 0 1 1').split()
+    vb_w, vb_h = float(vb[2]), float(vb[3])
+    aspect = vb_w / vb_h
+    if dim == 'width':
+        final_w, final_h = round(target), round(target / aspect)
+    else:
+        final_h, final_w = round(target), round(target * aspect)
+
+    logo = svg_to_logo(str(svg_path), final_w, final_h, color)
+
     lw, lh = logo.size
 
     # 위치 계산 (마진 45px 고정)
