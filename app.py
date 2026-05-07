@@ -188,7 +188,11 @@ st.markdown("""
 # ── 로고 파일 경로 ─────────────────────────────────────────────────────────────
 LOGO_DIR = Path(__file__).parent / "logos"
 
-# 브랜드별 로고 파일 (black/white 각각 지정 크기로 저장됨)
+import json as _json
+_sizes_path = Path(__file__).parent / "logos" / "logo_sizes.json"
+LOGO_SIZES = _json.loads(_sizes_path.read_text()) if _sizes_path.exists() else {}
+
+# 브랜드별 로고 파일
 LOGO_FILES = {
     "무신사 스탠다드": {
         "black": LOGO_DIR / "musinsa_standard_black.png",
@@ -272,7 +276,22 @@ def apply_watermark(
     if logo is None:
         return base_img.convert("RGB")
 
-    # 로고는 이미 지정 크기로 저장되어 있음 — 그대로 사용
+    # 합성 직전에 목표 크기로 리사이즈 (원본 고해상도 유지)
+    lw, lh = logo.size
+    size_info = LOGO_SIZES.get(
+        {v: k for k, v in {
+            "무신사 스탠다드": "musinsa_standard",
+            "무신사 기업": "musinsa_corporate",
+            "무신사 스토어": "musinsa_store",
+            "무신사 뷰티": "musinsa_beauty",
+            "무신사 스포츠": "musinsa_sports",
+            "29CM": "cm29",
+        }.items()}.get(brand, ""), {}
+    )
+    if size_info:
+        dim, target = size_info["dim"], size_info["size"]
+        ratio = target / (lw if dim == "width" else lh)
+        logo = logo.resize((round(lw * ratio), round(lh * ratio)), Image.LANCZOS)
     lw, lh = logo.size
 
     # 위치 계산 (마진 45px 고정)

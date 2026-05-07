@@ -1,0 +1,50 @@
+{
+  "musinsa_standard": {
+    "dim": "width",
+    "size": 126.52,
+    "orig": [
+      693,
+      300
+    ]
+  },
+  "musinsa_corporate": {
+    "dim": "height",
+    "size": 32,
+    "orig": [
+      707,
+      120
+    ]
+  },
+  "musinsa_store": {
+    "dim": "height",
+    "size": 34,
+    "orig": [
+      3001,
+      561
+    ]
+  },
+  "musinsa_beauty": {
+    "dim": "height",
+    "size": 45.51,
+    "orig": [
+      2236,
+      608
+    ]
+  },
+  "musinsa_sports": {
+    "dim": "height",
+    "size": 54.68,
+    "orig": [
+      1615,
+      670
+    ]
+  },
+  "cm29": {
+    "dim": "height",
+    "size": 34,
+    "orig": [
+      1000,
+      250
+    ]
+  }
+}
