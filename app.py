@@ -2,7 +2,9 @@ import streamlit as st
 from PIL import Image
 import io
 import zipfile
+import re
 from pathlib import Path
+import numpy as np
 
 st.set_page_config(page_title="무신사 워터마크 삽입기", page_icon="🖼️", layout="wide")
 
@@ -33,29 +35,64 @@ LOGO_DIR    = Path(__file__).parent / "logos"
 TARGET_SIZE = (1056, 720)
 MARGIN      = 45
 
-# 브랜드별 로고 파일명 (리사이즈 없이 그대로 사용)
+# 브랜드별 SVG 파일 및 최종 크기
 BRANDS = {
-    "무신사 스탠다드": {
-        "black": "musinsa_standard_black.png",
-        "white": "musinsa_standard_white.png",
-    },
-    "무신사 기업": {
-        "black": "musinsa_corporate_black.png",
-        "white": "musinsa_corporate_white.png",
-    },
-    "무신사 스토어": {
-        "black": "musinsa_store_black.png",
-        "white": "musinsa_store_white.png",
-    },
-    "무신사 뷰티": {
-        "black": "musinsa_beauty_black.png",
-        "white": "musinsa_beauty_white.png",
-    },
-    "29CM": {
-        "black": "cm29_black.png",
-        "white": "cm29_white.png",
-    },
+    "무신사 스탠다드": {"svg": "musinsa_standard.svg", "w": 126, "h": 54},
+    "무신사 기업":    {"svg": "musinsa_corporate.svg", "w": 193, "h": 32},
+    "무신사 스토어":  {"svg": "musinsa_store.svg",     "w": 182, "h": 34},
+    "무신사 뷰티":   {"svg": "musinsa_beauty.svg",     "w": 167, "h": 46},
+    "29CM":          {"svg": "cm29.svg",               "w": 136, "h": 34},
 }
+
+@st.cache_resource
+def get_browser():
+    from playwright.sync_api import sync_playwright
+    pw = sync_playwright().start()
+    browser = pw.chromium.launch()
+    return pw, browser
+
+def svg_to_logo(svg_path: Path, w: int, h: int, color: str) -> Image.Image | None:
+    """SVG를 playwright로 렌더링 → 투명 배경 RGBA 로고 반환"""
+    if not svg_path.exists():
+        return None
+
+    with open(svg_path) as f:
+        s = f.read()
+
+    # fill 색상 설정
+    fill_color = "#ffffff" if color == "white" else "#000000"
+    s = re.sub(r'fill\s*:\s*#[0-9a-fA-F]{3,6}', f'fill:{fill_color}', s)
+    s = re.sub(r'fill="[^"]+"', f'fill="{fill_color}"', s)
+    s = re.sub(r'(\.st\d+\s*\{[^}]*)fill\s*:\s*[^;}\s]+', rf'\g<1>fill:{fill_color}', s)
+    s = re.sub(r'\s+width="[^"]*"', '', s)
+    s = re.sub(r'\s+height="[^"]*"', '', s)
+    s = s.replace('<svg ', f'<svg width="{w}" height="{h}" ', 1)
+
+    html = (f'<!DOCTYPE html><html>'
+            f'<head><style>*{{margin:0;padding:0;}}'
+            f'body{{background:transparent;width:{w}px;height:{h}px;}}</style></head>'
+            f'<body>{s}</body></html>')
+
+    try:
+        pw, browser = get_browser()
+        page = browser.new_page(viewport={'width': w, 'height': h})
+        page.set_content(html)
+        png = page.screenshot(
+            clip={'x': 0, 'y': 0, 'width': w, 'height': h},
+            omit_background=True
+        )
+        page.close()
+        return Image.open(io.BytesIO(png)).convert("RGBA")
+    except Exception as e:
+        st.error(f"로고 렌더링 실패: {e}")
+        return None
+
+def load_logo(brand: str, color: str) -> Image.Image | None:
+    info = BRANDS.get(brand)
+    if not info:
+        return None
+    svg_path = LOGO_DIR / info["svg"]
+    return svg_to_logo(svg_path, info["w"], info["h"], color)
 
 def resize_and_crop(img, target=(1056, 720)):
     tw, th = target
@@ -64,16 +101,6 @@ def resize_and_crop(img, target=(1056, 720)):
     img    = img.resize((round(iw * scale), round(ih * scale)), Image.LANCZOS)
     iw, ih = img.size
     return img.crop(((iw-tw)//2, (ih-th)//2, (iw-tw)//2+tw, (ih-th)//2+th))
-
-def load_logo(brand, color):
-    info = BRANDS.get(brand)
-    if not info:
-        return None
-    path = LOGO_DIR / info[color]
-    if not path.exists():
-        return None
-    # 리사이즈 없이 그대로 로드
-    return Image.open(path).convert("RGBA")
 
 def apply_watermark(base_img, position, color, brand):
     base = base_img.convert("RGBA")
