@@ -210,6 +210,10 @@ LOGO_FILES = {
         "black": LOGO_DIR / "musinsa_sports_black.png",
         "white": LOGO_DIR / "musinsa_sports_white.png",
     },
+    "29CM": {
+        "black": LOGO_DIR / "cm29_black.png",
+        "white": LOGO_DIR / "cm29_white.png",
+    },
 }
 
 TARGET_SIZE = (1056, 720)
@@ -298,12 +302,7 @@ def image_to_bytes(img: Image.Image) -> bytes:
 
 # ── UI 시작 ───────────────────────────────────────────────────────────────────
 
-st.markdown("""
-<div class="main-header">
-    <h1>MUSINSA STANDARD — WATERMARK</h1>
-    <p>보도자료 이미지 워터마크 자동 삽입 시스템 · 1056×720px · JPG</p>
-</div>
-""", unsafe_allow_html=True)
+
 
 # ── 사이드바: 설정 패널 ────────────────────────────────────────────────────────
 with st.sidebar:
