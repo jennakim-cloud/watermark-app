@@ -3,14 +3,12 @@ from PIL import Image
 import io
 import zipfile
 import re
+import subprocess
+import sys
 from pathlib import Path
 import numpy as np
 
 # Playwright chromium 자동 설치
-import subprocess
-import sys
-import tempfile
-
 @st.cache_resource
 def install_playwright():
     subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
@@ -48,7 +46,6 @@ LOGO_DIR    = Path(__file__).parent / "logos"
 TARGET_SIZE = (1056, 720)
 MARGIN      = 45
 
-# 브랜드별 SVG 파일 및 최종 크기
 BRANDS = {
     "무신사 스탠다드": {"svg": "musinsa_standard.svg", "w": 126, "h": 54},
     "무신사 기업":    {"svg": "musinsa_corporate.svg", "w": 193, "h": 32},
@@ -57,8 +54,7 @@ BRANDS = {
     "29CM":          {"svg": "cm29.svg",               "w": 136, "h": 34},
 }
 
-def svg_to_logo(svg_path: Path, w: int, h: int, color: str) -> Image.Image | None:
-    """SVG를 subprocess playwright로 렌더링 → 투명 배경 RGBA 로고 반환"""
+def render_logo(svg_path: Path, final_w: int, final_h: int, color: str) -> Image.Image | None:
     if not svg_path.exists():
         return None
 
@@ -66,55 +62,77 @@ def svg_to_logo(svg_path: Path, w: int, h: int, color: str) -> Image.Image | Non
         s = f.read()
 
     fill_color = "#ffffff" if color == "white" else "#000000"
-    s = re.sub(r'fill\s*:\s*#[0-9a-fA-F]{3,6}', f'fill:{fill_color}', s)
-    s = re.sub(r'fill="[^"]+"', f'fill="{fill_color}"', s)
-    s = re.sub(r'(\.st\d+\s*\{[^}]*)fill\s*:\s*[^;}\s]+', rf'\g<1>fill:{fill_color}', s)
-    s = re.sub(r'\s+width="[^"]*"', '', s)
-    s = re.sub(r'\s+height="[^"]*"', '', s)
-    s = s.replace('<svg ', f'<svg width="{w}" height="{h}" ', 1)
+
+    # fill 강제 교체 (style 태그, 인라인, 속성, svg 태그 모두)
+    s = re.sub(r'(\.st\w+\s*\{[^}]*fill\s*:\s*)#[0-9a-fA-F]{3,6}', rf'\g<1>{fill_color}', s)
+    s = re.sub(r'(fill\s*:\s*)#[0-9a-fA-F]{3,6}', rf'\g<1>{fill_color}', s)
+    s = re.sub(r'fill="(?!none)[^"]*"', f'fill="{fill_color}"', s)
+    s = re.sub(r'(<svg\b[^>]*?)(\s*>)', rf'\1 fill="{fill_color}" width="{final_w}" height="{final_h}"\2', s, count=1)
+
+    # 흰 로고 → 검정 배경 렌더링 후 R채널을 알파로
+    # 검정 로고 → 흰 배경 렌더링 후 (255-R)을 알파로
+    bg = "black" if color == "white" else "white"
 
     html = (f'<!DOCTYPE html><html>'
             f'<head><style>*{{margin:0;padding:0;}}'
-            f'body{{background:transparent;width:{w}px;height:{h}px;}}</style></head>'
+            f'body{{background:{bg};width:{final_w}px;height:{final_h}px;}}</style></head>'
             f'<body>{s}</body></html>')
 
-    # 별도 Python 프로세스로 playwright 실행 (스레드 충돌 방지)
     script = f"""
-import sys
 from playwright.sync_api import sync_playwright
-import base64
-
+import sys
 html = {repr(html)}
-w, h = {w}, {h}
-
+w, h = {final_w}, {final_h}
 with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page(viewport={{'width': w, 'height': h}})
     page.set_content(html)
-    png = page.screenshot(clip={{'x':0,'y':0,'width':w,'height':h}}, omit_background=True)
+    png = page.screenshot(clip={{'x':0,'y':0,'width':w,'height':h}})
     browser.close()
-
 sys.stdout.buffer.write(png)
 """
     try:
-        result = subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True, timeout=30
-        )
-        if result.returncode != 0 or not result.stdout:
-            st.error(f"렌더링 실패: {result.stderr.decode()[:200]}")
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, timeout=30)
+        if not result.stdout:
             return None
-        return Image.open(io.BytesIO(result.stdout)).convert("RGBA")
+
+        img = Image.open(io.BytesIO(result.stdout)).convert("RGB")
+        arr = np.array(img, dtype=np.float32)
+
+        if color == "white":
+            alpha = arr[:,:,0].astype(np.uint8)
+            out = np.zeros((final_h, final_w, 4), dtype=np.uint8)
+            out[:,:,0] = 255
+            out[:,:,1] = 255
+            out[:,:,2] = 255
+            out[:,:,3] = alpha
+        else:
+            alpha = np.clip(255 - arr[:,:,0], 0, 255).astype(np.uint8)
+            out = np.zeros((final_h, final_w, 4), dtype=np.uint8)
+            out[:,:,3] = alpha
+
+        return Image.fromarray(out)
     except Exception as e:
         st.error(f"로고 렌더링 실패: {e}")
         return None
 
-def load_logo(brand: str, color: str) -> Image.Image | None:
+@st.cache_data
+def get_logo(brand: str, color: str) -> bytes | None:
     info = BRANDS.get(brand)
     if not info:
         return None
-    svg_path = LOGO_DIR / info["svg"]
-    return svg_to_logo(svg_path, info["w"], info["h"], color)
+    logo = render_logo(LOGO_DIR / info["svg"], info["w"], info["h"], color)
+    if logo is None:
+        return None
+    buf = io.BytesIO()
+    logo.save(buf, format="PNG")
+    return buf.getvalue()
+
+def load_logo(brand: str, color: str) -> Image.Image | None:
+    data = get_logo(brand, color)
+    if data is None:
+        return None
+    return Image.open(io.BytesIO(data)).convert("RGBA")
 
 def resize_and_crop(img, target=(1056, 720)):
     tw, th = target
