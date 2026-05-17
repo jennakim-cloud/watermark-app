@@ -162,7 +162,7 @@ def apply_watermark(base_img, position, color, brand):
 
 def image_to_bytes(img):
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=95)
+    img.save(buf, format="JPEG", quality=100)
     return buf.getvalue()
 
 # ── 사이드바 ──────────────────────────────────────────────────────────────────
